@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
@@ -24,7 +22,7 @@ public static class WaterUtility
 #if UNITY_EDITOR
         if (camera.cameraType == CameraType.SceneView)
         {
-            return StageUtility.IsGameObjectRenderedByCamera(water, camera);
+            return UnityEditor.SceneManagement.StageUtility.IsGameObjectRenderedByCamera(water, camera);
         }
 #endif
         return true;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Build;
@@ -5,66 +6,144 @@ using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering;
 using WaterSystem;
+using WaterSystem.Settings;
 
 // Simple example of stripping of a debug build configuration
 class ShaderPreprocessor : IPreprocessShaders
 {
-    ShaderKeyword m_KeywordRefCube;
-    ShaderKeyword m_KeywordRefProbes;
-    ShaderKeyword m_KeywordRefPlanar;
-    ShaderKeyword m_KeywordRefSSR;
-    
-    ShaderKeyword m_KeywordRefSSR_LOW;
-    ShaderKeyword m_KeywordRefSSR_MID;
-    ShaderKeyword m_KeywordRefSSR_HIGH;
-    
-    ShaderKeyword m_KeywordStructBuffer;
+    static readonly ShaderKeyword m_KeywordRefCube = new ShaderKeyword("_REFLECTION_CUBEMAP");
+    static readonly ShaderKeyword m_KeywordRefProbes = new ShaderKeyword("_REFLECTION_PROBES");
+    static readonly ShaderKeyword m_KeywordRefPlanar = new ShaderKeyword("_REFLECTION_PLANARREFLECTION");
+    static readonly ShaderKeyword m_KeywordRefSSR = new ShaderKeyword("_REFLECTION_SSR");
 
-    public ShaderPreprocessor()
+    static readonly ShaderKeyword m_KeywordRefSSR_LOW = new ShaderKeyword("_SSR_SAMPLES_LOW");
+    static readonly ShaderKeyword m_KeywordRefSSR_MID = new ShaderKeyword("_SSR_SAMPLES_MEDIUM");
+    static readonly ShaderKeyword m_KeywordRefSSR_HIGH = new ShaderKeyword("_SSR_SAMPLES_HIGH");
+
+    static readonly ShaderKeyword m_KeywordShadow_LOW = new ShaderKeyword("_SHADOW_SAMPLES_LOW");
+    static readonly ShaderKeyword m_KeywordShadow_MID = new ShaderKeyword("_SHADOW_SAMPLES_MEDIUM");
+    static readonly ShaderKeyword m_KeywordShadow_HIGH = new ShaderKeyword("_SHADOW_SAMPLES_HIGH");
+
+    static readonly ShaderKeyword m_KeywordDispersion = new ShaderKeyword("_DISPERSION");
+
+    static readonly ShaderKeyword[] m_keywords = new ShaderKeyword[]
     {
-        m_KeywordRefCube = new ShaderKeyword("_REFLECTION_CUBEMAP");
-        m_KeywordRefProbes = new ShaderKeyword("_REFLECTION_PROBES");
-        m_KeywordRefPlanar = new ShaderKeyword("_REFLECTION_PLANARREFLECTION");
-        m_KeywordRefSSR = new ShaderKeyword("_REFLECTION_SSR");
-        
-        m_KeywordRefSSR_LOW = new ShaderKeyword("_SSR_SAMPLES_LOW");
-        m_KeywordRefSSR_MID = new ShaderKeyword("_SSR_SAMPLES_MEDIUM");
-        m_KeywordRefSSR_HIGH = new ShaderKeyword("_SSR_SAMPLES_HIGH");
-        
-        m_KeywordStructBuffer = new ShaderKeyword("USE_STRUCTURED_BUFFER");
-    }
+        m_KeywordRefCube, m_KeywordRefProbes, m_KeywordRefPlanar, m_KeywordRefSSR,
+        m_KeywordRefSSR_LOW, m_KeywordRefSSR_MID, m_KeywordRefSSR_HIGH,
+        m_KeywordShadow_LOW, m_KeywordShadow_MID, m_KeywordShadow_HIGH,
+        m_KeywordDispersion,
+    };
 
     // Multiple callback may be implemented.
     // The first one executed is the one where callbackOrder is returning the smallest number.
     public int callbackOrder { get { return 0; } }
 
-    public void OnProcessShader(
-        Shader shader, ShaderSnippetData snippet, IList<ShaderCompilerData> shaderCompilerData)
+    public void OnProcessShader(Shader shader, ShaderSnippetData snippet, IList<ShaderCompilerData> shaderCompilerData)
     {
-        // In development, don't strip debug variants
-        if (!shader.name.Contains("Boat Attack/Water"))
+        if (!shader.name.Equals("Boat Attack/Water", System.StringComparison.OrdinalIgnoreCase))
             return;
 
+        // Set of included variants, each entry is bitfield
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+        HashSet<int> includedVariants = new HashSet<int>(1024);
 
-        var oceans = AssetDatabase.FindAssets($"t:{nameof(Ocean)}");
-
-        var refType = 0;
-        foreach (var oceanGuid in oceans)
+        Include(WaterProjectSettings.Instance.defaultQualitySettings, includedVariants);
+        foreach (var setting in WaterProjectSettings.Instance.qualitySettings)
         {
-            //var ocean = AssetDatabase.LoadAssetAtPath<Ocean>(AssetDatabase.GUIDToAssetPath(oceanGuid));
-            //refType |= (int)ocean.settingsData.refType;
+            Include(setting, includedVariants);
         }
 
-        /*
+        int startCount = shaderCompilerData.Count;
         for (int i = 0; i < shaderCompilerData.Count; ++i)
         {
-            // remove cube
-            if (shaderCompilerData[i].shaderKeywordSet.IsEnabled(m_KeywordRefCube))
+            if (!IsIncluded(shaderCompilerData[i].shaderKeywordSet, includedVariants))
             {
                 shaderCompilerData.RemoveAt(i);
                 --i;
             }
         }
-        */
+        Debug.Log($"Water shaders - stripped {startCount - shaderCompilerData.Count} variants in {sw.Elapsed.TotalSeconds:0.0}s");
+    }
+
+    private void Include(WaterQualitySettings setting, HashSet<int> includedVariants)
+    {
+        int bitField = 0;
+        if (setting.reflectionSettings.reflectionType == Data.ReflectionSettings.Type.Cubemap)
+        {
+            AddBit(ref bitField, m_KeywordRefCube);
+        }
+        else if (setting.reflectionSettings.reflectionType == Data.ReflectionSettings.Type.PlanarReflection)
+        {
+            AddBit(ref bitField, m_KeywordRefPlanar);
+        }
+        else if (setting.reflectionSettings.reflectionType == Data.ReflectionSettings.Type.ReflectionProbe)
+        {
+            AddBit(ref bitField, m_KeywordRefProbes);
+        }
+        else if (setting.reflectionSettings.reflectionType == Data.ReflectionSettings.Type.ScreenSpaceReflection)
+        {
+            AddBit(ref bitField, m_KeywordRefSSR);
+
+            if (setting.ssrSettings.steps == Data.SsrSettings.Steps.Low)
+            {
+                AddBit(ref bitField, m_KeywordRefSSR_LOW);
+            }
+            else if (setting.ssrSettings.steps == Data.SsrSettings.Steps.Medium)
+            {
+                AddBit(ref bitField, m_KeywordRefSSR_MID);
+            }
+            else if (setting.ssrSettings.steps == Data.SsrSettings.Steps.High)
+            {
+                AddBit(ref bitField, m_KeywordRefSSR_HIGH);
+            }
+        }
+
+        if (setting.causticSettings.Mode == Data.CausticSettings.CausticMode.Simple && setting.causticSettings.Dispersion)
+        {
+            AddBit(ref bitField, m_KeywordDispersion);
+        }
+
+        if (setting.lightingSettings.Mode == Data.LightingSettings.LightingMode.Volume)
+        {
+            if (setting.lightingSettings.VolumeSamples == Data.LightingSettings.VolumeSample.Low)
+            {
+                AddBit(ref bitField, m_KeywordShadow_LOW);
+            }
+            else if (setting.lightingSettings.VolumeSamples == Data.LightingSettings.VolumeSample.Medium)
+            {
+                AddBit(ref bitField, m_KeywordShadow_MID);
+            }
+            else if (setting.lightingSettings.VolumeSamples == Data.LightingSettings.VolumeSample.High)
+            {
+                AddBit(ref bitField, m_KeywordShadow_HIGH);
+            }
+        }
+        includedVariants.Add(bitField);
+    }
+
+    private void AddBit(ref int bitField, ShaderKeyword keyword)
+    {
+        for (int i = 0; i < m_keywords.Length; i++)
+        {
+            if (m_keywords[i].index == keyword.index)
+            {
+                bitField |= (1 << i);
+                return;
+            }
+        }
+    }
+
+    private bool IsIncluded(ShaderKeywordSet shaderKeywordSet, HashSet<int> includedVariants)
+    {
+        // Only include sets, which contain exact variants of our keywords
+        int keywordMask = 0;
+        for (int i = 0; i < m_keywords.Length; i++)
+        {
+            if (shaderKeywordSet.IsEnabled(m_keywords[i]))
+            {
+                keywordMask |= (1 << i);
+            }
+        }
+        return includedVariants.Contains(keywordMask);
     }
 }

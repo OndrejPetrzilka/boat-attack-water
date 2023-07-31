@@ -143,8 +143,7 @@ namespace WaterSystem.Settings
         {
             if (index >= 0)
             {
-                var disable = qualitySettings[index] == null || qualitySettings[index].managedReferenceValue ==
-                    defaultSettings.managedReferenceValue;
+                var disable = false;
                 var data = disable ? defaultSettings : qualitySettings[index];
                 EditorGUI.BeginDisabledGroup(disable);
                 EditorGUILayout.PropertyField(data, true);

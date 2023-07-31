@@ -27,17 +27,17 @@ namespace WaterSystem.Settings
         /// <summary>
         /// Default base WaterQualitySettings.
         /// </summary>
-        [SerializeReference] public WaterQualitySettings defaultQualitySettings;
+        public WaterQualitySettings defaultQualitySettings;
 
         /// <summary>
         /// List of WaterQualitySettings for all the Quality Levels
         /// </summary>
-        [SerializeReference] public List<WaterQualitySettings> qualitySettings = new List<WaterQualitySettings>();
+        public List<WaterQualitySettings> qualitySettings = new List<WaterQualitySettings>();
 
         /// <summary>
         /// Resources for the WaterSystem, contains shaders, meshes, textures, etc..
         /// </summary>
-        [SerializeReference] public Resources _resources;
+        public Resources _resources;
         
         public WaterProjectSettings()
         {

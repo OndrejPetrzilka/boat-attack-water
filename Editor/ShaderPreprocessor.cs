@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Rendering;
@@ -10,6 +11,30 @@ using WaterSystem.Settings;
 
 class ShaderPreprocessor : IPreprocessShaders
 {
+    struct Features : IEquatable<Features>
+    {
+        public Data.ReflectionSettings.Type Reflection;
+        public bool Dispersion;
+        public bool VolumeLight;
+
+        public override bool Equals(object obj)
+        {
+            return obj is Features features && Equals(features);
+        }
+
+        public bool Equals(Features other)
+        {
+            return Reflection == other.Reflection &&
+                   Dispersion == other.Dispersion &&
+                   VolumeLight == other.VolumeLight;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Reflection, Dispersion, VolumeLight);
+        }
+    }
+
     readonly ShaderKeyword m_KeywordRefCube = new ShaderKeyword("_REFLECTION_CUBEMAP");
     readonly ShaderKeyword m_KeywordRefProbes = new ShaderKeyword("_REFLECTION_PROBES");
     readonly ShaderKeyword m_KeywordRefPlanar = new ShaderKeyword("_REFLECTION_PLANARREFLECTION");
@@ -48,107 +73,74 @@ class ShaderPreprocessor : IPreprocessShaders
         if (!shader.name.StartsWith("Boat Attack/Water", StringComparison.OrdinalIgnoreCase))
             return;
 
-        // Set of included variants, each entry is bitfield
         System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
-        HashSet<int> includedVariants = new HashSet<int>(1024);
-
-        Include(WaterProjectSettings.Instance.defaultQualitySettings, includedVariants);
+        HashSet<Features> includedFeatures = new HashSet<Features>(128);
+        Include(WaterProjectSettings.Instance.defaultQualitySettings, includedFeatures);
         foreach (var setting in WaterProjectSettings.Instance.qualitySettings)
         {
-            Include(setting, includedVariants);
+            Include(setting, includedFeatures);
         }
 
-        int startCount = shaderCompilerData.Count;
+        List<ShaderCompilerData> strippedVariants = new List<ShaderCompilerData>(512);
         for (int i = 0; i < shaderCompilerData.Count; ++i)
         {
-            if (!IsIncluded(shaderCompilerData[i].shaderKeywordSet, includedVariants))
+            if (!IsIncluded(shaderCompilerData[i].shaderKeywordSet, includedFeatures))
             {
+                strippedVariants.Add(shaderCompilerData[i]);
                 shaderCompilerData.RemoveAt(i);
                 --i;
             }
         }
-        Debug.Log($"Water shaders - stripped {startCount - shaderCompilerData.Count} variants in {sw.Elapsed.TotalSeconds:0.0}s");
+
+        string variantList = strippedVariants.Count > 0 ? string.Join("\r\n", strippedVariants.Select(s => FormatVariant(s))) : string.Empty;
+        Debug.Log($"Water shaders - stripped {strippedVariants} variants in {sw.Elapsed.TotalSeconds:0.0}s\r\n{variantList}");
     }
 
-    private void Include(WaterQualitySettings setting, HashSet<int> includedVariants)
+    private string FormatVariant(ShaderCompilerData s)
     {
-        int bitField = 0;
-        if (setting.reflectionSettings.reflectionType == Data.ReflectionSettings.Type.Cubemap)
-        {
-            AddBit(ref bitField, m_KeywordRefCube);
-        }
-        else if (setting.reflectionSettings.reflectionType == Data.ReflectionSettings.Type.PlanarReflection)
-        {
-            AddBit(ref bitField, m_KeywordRefPlanar);
-        }
-        else if (setting.reflectionSettings.reflectionType == Data.ReflectionSettings.Type.ReflectionProbe)
-        {
-            AddBit(ref bitField, m_KeywordRefProbes);
-        }
-        else if (setting.reflectionSettings.reflectionType == Data.ReflectionSettings.Type.ScreenSpaceReflection)
-        {
-            AddBit(ref bitField, m_KeywordRefSSR);
-
-            if (setting.ssrSettings.steps == Data.SsrSettings.Steps.Low)
-            {
-                AddBit(ref bitField, m_KeywordRefSSR_LOW);
-            }
-            else if (setting.ssrSettings.steps == Data.SsrSettings.Steps.Medium)
-            {
-                AddBit(ref bitField, m_KeywordRefSSR_MID);
-            }
-            else if (setting.ssrSettings.steps == Data.SsrSettings.Steps.High)
-            {
-                AddBit(ref bitField, m_KeywordRefSSR_HIGH);
-            }
-        }
-
-        if (setting.causticSettings.Mode == Data.CausticSettings.CausticMode.Simple && setting.causticSettings.Dispersion)
-        {
-            AddBit(ref bitField, m_KeywordDispersion);
-        }
-
-        if (setting.lightingSettings.Mode == Data.LightingSettings.LightingMode.Volume)
-        {
-            if (setting.lightingSettings.VolumeSamples == Data.LightingSettings.VolumeSample.Low)
-            {
-                AddBit(ref bitField, m_KeywordShadow_LOW);
-            }
-            else if (setting.lightingSettings.VolumeSamples == Data.LightingSettings.VolumeSample.Medium)
-            {
-                AddBit(ref bitField, m_KeywordShadow_MID);
-            }
-            else if (setting.lightingSettings.VolumeSamples == Data.LightingSettings.VolumeSample.High)
-            {
-                AddBit(ref bitField, m_KeywordShadow_HIGH);
-            }
-        }
-        includedVariants.Add(bitField);
+        return string.Join(",", s.shaderKeywordSet.GetShaderKeywords());
     }
 
-    private void AddBit(ref int bitField, ShaderKeyword keyword)
+    private void Include(WaterQualitySettings setting, HashSet<Features> includedFeatures)
     {
-        for (int i = 0; i < m_keywords.Length; i++)
+        Features features;
+        features.Reflection = setting.reflectionSettings.reflectionType;
+        features.Dispersion = setting.causticSettings.Mode == Data.CausticSettings.CausticMode.Simple && setting.causticSettings.Dispersion;
+        features.VolumeLight = setting.lightingSettings.Mode == Data.LightingSettings.LightingMode.Volume;
+        includedFeatures.Add(features);
+    }
+
+    private bool IsIncluded(ShaderKeywordSet shaderKeywordSet, HashSet<Features> includedFeatures)
+    {
+        Features feature = GetShaderFeatures(shaderKeywordSet);
+
+        // Only compile cube/plane/probe reflections with one SSR setting
+        if (feature.Reflection != Data.ReflectionSettings.Type.ScreenSpaceReflection && (shaderKeywordSet.IsEnabled(m_KeywordRefSSR_MID) || shaderKeywordSet.IsEnabled(m_KeywordRefSSR_HIGH)))
         {
-            if (m_keywords[i].index == keyword.index)
-            {
-                bitField |= (1 << i);
-                return;
-            }
+            return false;
+        }
+        else if (feature.Reflection < 0)
+        {
+            // No reflection, probably vertex shader, don't strip
+            return true;
+        }
+        else
+        {
+            return includedFeatures.Contains(feature);
         }
     }
 
-    private bool IsIncluded(ShaderKeywordSet shaderKeywordSet, HashSet<int> includedVariants)
+    private Features GetShaderFeatures(ShaderKeywordSet shaderKeywordSet)
     {
-        // Only include sets, which contain exact variants of our keywords
-        int keywordMask = 0;
-        for (int i = 0; i < m_keywords.Length; i++)
-        {
-            if (shaderKeywordSet.IsEnabled(m_keywords[i]))
-            {
-                keywordMask |= (1 << i);
-            }
-        }
-        return includedVariants.Contains(keywordMask);
+        Features result;
+        if (shaderKeywordSet.IsEnabled(m_KeywordRefCube)) result.Reflection = Data.ReflectionSettings.Type.Cubemap;
+        else if (shaderKeywordSet.IsEnabled(m_KeywordRefPlanar)) result.Reflection = Data.ReflectionSettings.Type.PlanarReflection;
+        else if (shaderKeywordSet.IsEnabled(m_KeywordRefProbes)) result.Reflection = Data.ReflectionSettings.Type.ReflectionProbe;
+        else if (shaderKeywordSet.IsEnabled(m_KeywordRefSSR)) result.Reflection = Data.ReflectionSettings.Type.ScreenSpaceReflection;
+        else result.Reflection = (Data.ReflectionSettings.Type)(-1);
+
+        result.Dispersion = shaderKeywordSet.IsEnabled(m_KeywordDispersion);
+        result.VolumeLight = shaderKeywordSet.IsEnabled(m_KeywordShadow_LOW) || shaderKeywordSet.IsEnabled(m_KeywordShadow_MID) || shaderKeywordSet.IsEnabled(m_KeywordShadow_HIGH);
+        return result;
     }
 }

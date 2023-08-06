@@ -33,6 +33,11 @@ class ShaderPreprocessor : IPreprocessShaders
         {
             return HashCode.Combine(Reflection, Dispersion, VolumeLight);
         }
+
+        public override string ToString()
+        {
+            return $"Reflection: {Reflection}, Dispersion: {Dispersion}, VolumeLight: {VolumeLight}";
+        }
     }
 
     readonly ShaderKeyword m_KeywordRefCube = new ShaderKeyword("_REFLECTION_CUBEMAP");
@@ -60,6 +65,9 @@ class ShaderPreprocessor : IPreprocessShaders
         if (!shader.name.StartsWith("Boat Attack/Water", StringComparison.OrdinalIgnoreCase))
             return;
 
+        if (snippet.shaderType != ShaderType.Fragment)
+            return;
+
         System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
         HashSet<Features> includedFeatures = new HashSet<Features>(128);
         Include(WaterProjectSettings.Instance.defaultQualitySettings, includedFeatures);
@@ -67,25 +75,19 @@ class ShaderPreprocessor : IPreprocessShaders
         {
             Include(setting, includedFeatures);
         }
+        string featureList = includedFeatures.Count > 0 ? string.Join("\r\n", includedFeatures) : string.Empty;
+        Debug.Log($"Water shaders - {includedFeatures.Count} feature combinations used, processing {shaderCompilerData.Count} variants\r\n" + featureList);
 
-        List<ShaderCompilerData> strippedVariants = new List<ShaderCompilerData>(512);
-        for (int i = 0; i < shaderCompilerData.Count; ++i)
+        int startCount = shaderCompilerData.Count;
+        for (int i = shaderCompilerData.Count - 1; i >= 0; i--)
         {
             if (!IsIncluded(shaderCompilerData[i].shaderKeywordSet, includedFeatures))
             {
-                strippedVariants.Add(shaderCompilerData[i]);
                 shaderCompilerData.RemoveAt(i);
-                --i;
             }
         }
 
-        string variantList = strippedVariants.Count > 0 ? string.Join("\r\n", strippedVariants.Select(s => FormatVariant(s))) : string.Empty;
-        Debug.Log($"Water shaders - stripped {strippedVariants.Count} variants in {sw.Elapsed.TotalSeconds:0.0}s\r\n{variantList}");
-    }
-
-    private string FormatVariant(ShaderCompilerData s)
-    {
-        return string.Join(",", s.shaderKeywordSet.GetShaderKeywords());
+        Debug.Log($"Water shaders - stripped {shaderCompilerData.Count - startCount} variants in {sw.Elapsed.TotalSeconds:0.0}s\r\n");
     }
 
     private void Include(WaterQualitySettings setting, HashSet<Features> includedFeatures)

@@ -249,16 +249,7 @@ namespace WaterSystem.Settings
 
         private static SerializedObject GetSerializedSettings()
         {
-            return new SerializedObject(GetOrCreateSettings());
-        }
-
-        [InitializeOnLoadMethod]
-        public static void LoadEditorSettingsAsset()
-        {
-            if (!Application.isPlaying)
-            {
-                WaterProjectSettings.Instance = GetOrCreateSettings();
-            }
+            return new SerializedObject(WaterProjectSettings.Instance);
         }
     }
 }

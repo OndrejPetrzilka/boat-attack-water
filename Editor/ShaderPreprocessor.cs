@@ -50,22 +50,9 @@ class ShaderPreprocessor : IPreprocessShaders
 
     readonly ShaderKeyword m_KeywordDispersion = new ShaderKeyword("_DISPERSION");
 
-    readonly ShaderKeyword[] m_keywords;
-
     public int callbackOrder
     {
         get { return 0; }
-    }
-
-    public ShaderPreprocessor()
-    {
-        m_keywords = new ShaderKeyword[]
-        {
-            m_KeywordRefCube, m_KeywordRefProbes, m_KeywordRefPlanar, m_KeywordRefSSR,
-            m_KeywordRefSSR_LOW, m_KeywordRefSSR_MID, m_KeywordRefSSR_HIGH,
-            m_KeywordShadow_LOW, m_KeywordShadow_MID, m_KeywordShadow_HIGH,
-            m_KeywordDispersion,
-        };
     }
 
     public void OnProcessShader(Shader shader, ShaderSnippetData snippet, IList<ShaderCompilerData> shaderCompilerData)

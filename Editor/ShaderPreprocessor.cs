@@ -80,7 +80,7 @@ class ShaderPreprocessor : IPreprocessShaders
         }
 
         string variantList = strippedVariants.Count > 0 ? string.Join("\r\n", strippedVariants.Select(s => FormatVariant(s))) : string.Empty;
-        Debug.Log($"Water shaders - stripped {strippedVariants} variants in {sw.Elapsed.TotalSeconds:0.0}s\r\n{variantList}");
+        Debug.Log($"Water shaders - stripped {strippedVariants.Count} variants in {sw.Elapsed.TotalSeconds:0.0}s\r\n{variantList}");
     }
 
     private string FormatVariant(ShaderCompilerData s)

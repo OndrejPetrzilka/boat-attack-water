@@ -42,8 +42,6 @@ namespace WaterSystem
 
         public static void Init()
         {
-            if(Debug.isDebugBuild)
-                Debug.Log("Initializing Gerstner Waves Jobs");
             //Wave data
             _waveCount = Ocean.Instance.waves.Length;
             _waveData = new NativeArray<Data.Wave>(_waveCount, Allocator.Persistent);
@@ -73,8 +71,6 @@ namespace WaterSystem
 
         public static void Cleanup()
         {
-            if(Debug.isDebugBuild)
-                Debug.Log("Cleaning up Gerstner Wave Jobs");
             _waterHeightHandle.Complete();
             
             DepthGenerator.CleanUp();

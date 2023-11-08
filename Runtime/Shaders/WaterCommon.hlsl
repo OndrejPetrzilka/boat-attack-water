@@ -409,29 +409,29 @@ half3 WaterShading(WaterInputData input, WaterSurfaceData surfaceData, float4 ad
 		case 0: // none
 			return output;
 		case 1: // normalWS
-			return saturate(half4(input.normalWS.x, 0, input.normalWS.z, 1) * 10);
+			return saturate(half3(input.normalWS.x, 0, input.normalWS.z) * 10);
 		case 2: // Reflection
-			return half4(reflection, 1);
+			return reflection;
 		case 3: // Refraction
-			return half4(refraction, 1);
+			return refraction;
 		case 4: // Specular
-			return half4(spec, 1);
+			return spec;
 		case 5: // SSS
-			return half4(sss, 1);
+			return sss;
 		case 6: // Foam
-			return half4(surfaceData.foam.xxx, 1) * surfaceData.foamMask;
+			return surfaceData.foam.xxx * surfaceData.foamMask;
 		case 7: // Foam Mask
-			return half4(surfaceData.foamMask.xxx, 1);
+			return surfaceData.foamMask.xxx;
 		case 8: // buffer A
-			return input.waterBufferA;
+			return input.waterBufferA.xyz;
 		case 9: // buffer B
-			return input.waterBufferB;
+			return input.waterBufferB.xyz;
 		case 10: // eye depth
 			float d = input.depth;
-			return half4(frac(d), frac(d * 0.1), 0, 1);
+			return half3(frac(d), frac(d * 0.1), 0);
 		case 11: // water depth texture
 			float wd = WaterTextureDepth(screenUV);
-			return half4(frac(wd), frac(wd * 0.1), 0, 1);
+			return half3(frac(wd), frac(wd * 0.1), 0);
 		case 12: // fresnel
 			return fresnelTerm;
 		case 13: // mesh debug

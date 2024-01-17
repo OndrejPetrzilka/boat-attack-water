@@ -61,7 +61,6 @@ namespace WaterSystem
 
         // Render Passes
         private InfiniteWaterPlane _infiniteWaterPass;
-        private OceanPass _oceanPass;
         private WaterFxPass _waterBufferPass;
         private WaterCausticsPass _causticsPass;
 

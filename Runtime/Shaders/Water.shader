@@ -6,7 +6,7 @@
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent-100" "RenderPipeline" = "UniversalPipeline" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-49" "RenderPipeline" = "UniversalPipeline" }
         ZWrite On
 
         Blend SrcAlpha OneMinusSrcAlpha // Traditional transparency

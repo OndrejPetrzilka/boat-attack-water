@@ -50,6 +50,8 @@ namespace WaterSystem
         private float _maxWaveHeight;
         private float _waveHeight;
 
+        [SerializeField] public RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
+
         [SerializeReference] public Data.OceanSettings settingsData = new Data.OceanSettings();
 
         public DebugShading shadingDebug;
@@ -59,6 +61,7 @@ namespace WaterSystem
 
         // Render Passes
         private InfiniteWaterPlane _infiniteWaterPass;
+        private OceanPass _oceanPass;
         private WaterFxPass _waterBufferPass;
         private WaterCausticsPass _causticsPass;
 
@@ -174,6 +177,7 @@ namespace WaterSystem
             {
                 _infiniteWaterPass = new InfiniteWaterPlane();
             }
+            _infiniteWaterPass.renderPassEvent = renderPassEvent;
             _infiniteWaterPass.Material = _infiniteWaterMaterial;
             urpData.scriptableRenderer.EnqueuePass(_infiniteWaterPass);
 
